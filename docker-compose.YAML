@@ -1,0 +1,5 @@
+services:
+  app:
+    build: .
+    image: ingestion-layer:1.0.0
+    
