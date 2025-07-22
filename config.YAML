@@ -1,0 +1,3 @@
+api_config:
+  base_url: "https://fakerapi.it/api/v2/"
+  number_of_users: 100
