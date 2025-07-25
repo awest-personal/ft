@@ -104,10 +104,22 @@ then again, this is supposed to be done anonymously, so can just authenticate an
 - can we horizontally scale this out, would the machines be indifferent to each other. generally speaking designing systems for 2+ computers is much harder. Distributed computing. We'd then need an orchestrator. We could design our code so as to be a precursor to htis. 
 
 ### code organisation
- - do we have slas to cover 
+ - do we bother modularizing, probs
 
 
 if we actually think about the data flow here
 get stuff from API. 
 our call tells us what needs to go into the data set. 
 output isn't deterministic. 
+
+do work here? 
+limited by i/o anyway
+
+having in-memory database leads to some problems, what if everything goes down? 
+
+
+but that would be the job of the orchestrator, don't need to address that here. 
+
+what transformations are we doing? the id column is only useful in the context of making sure each json is processed. 
+
+parquet would compress well, lots of strings
