@@ -1,5 +1,18 @@
+version: '0.0.1'
+
 services:
-  app:
-    build: .
-    image: ingestion-layer:1.0.0
-    
+  ingestion-service:
+    build: ./ingest
+    volumes:
+      - db_data:/data
+
+  export-service:
+    build: ./export
+    volumes:
+      - db_data:/data
+    depends_on:
+      ingestion-service:
+        condition: service_completed_successfully
+
+volumes:
+  db_data:

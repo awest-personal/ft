@@ -1,0 +1,7 @@
+gcs:
+  bucket_name: "test-bucket-01223"
+  folder_path: "aidan-west"
+  blob_name: "data_engineering_task.parquet"
+
+duckdb:
+  table_name: "faker_api_table"

@@ -1,6 +1,6 @@
 FROM python:3.13-slim-bookworm
 
-WORKDIR /app
+WORKDIR /app/ingest
 
 COPY requirements.txt requirements.txt
 
