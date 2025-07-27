@@ -1,8 +1,8 @@
 api_config:
   base_url: "https://fakerapi.it/api/v2/"
   number_of_users: 100
-  number_of_calls: 10
-  batch_size: 4
+  number_of_calls: 1
+  batch_size: 1
   concurrency_limit: 2
 
 duckdb:
