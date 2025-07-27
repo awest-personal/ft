@@ -1,6 +1,9 @@
-from google.cloud import storage
 import os
 import logging
+import duckdb
+
+from google.cloud import storage
+
 
 def create_parquet_from_db(con: duckdb.DuckDBPyConnection, table_name: str) -> str:
     """
