@@ -1,12 +1,14 @@
 api_config:
   base_url: "https://fakerapi.it/api/v2/"
   number_of_users: 100
-  number_of_calls: 4
-  batch_size: 2
+  number_of_calls: 1
+  batch_size: 1
+  concurrency_limit: 2
 
-
-schema: 
-  columns:
+duckdb:
+  table_name: "faker_api_table"
+  table_location: "/data/database.db"
+  schema: 
     id: int64
     uuid: string
     firstname: string
@@ -18,17 +20,4 @@ schema:
     macAddress: string
     website: string
     image: string
-
-target_configs: 
-  pandas: 
-    exclude_columns: []
-
-  duckdb:
-    exclude_columns:
-      - id
-    table_name: "faker_api_table"
-
-gcs:
-  row_size: 300
-  bucket_name: "test-bucket"
-  gcs_folder_name: "aidan-west"
+ 

@@ -3,77 +3,87 @@ import yaml
 import aiohttp
 import asyncio
 import duckdb
+import logging
 
-from api import ApiClient
-from db import create_duck_db_table_creation_string_from_schema, create_duck_db_table_insertion_string_from_schema
+
+from api import ApiClient, ApiError
+from db import create_table_from_schema, insert_data_into_duckdb
+
+
+
+async def ingestion_pipeline(con: duckdb.DuckDBPyConnection, api_client: ApiClient, config: dict):
+    """
+    Function to orchestrate the data ingestion pipeline. Will create table, concurrently fetch api data and then insert it in batches.
+    """
+
+    api_config = config["api_config"]
+    columns = config["duckdb"]["schema"]
+    print(f"THESE ARE THE COLUMNS: {columns}")
+    table_name = config["duckdb"]["table_name"]
+
+    user_quantity = api_config["number_of_users"]
+    concurrency_limit = api_config["concurrency_limit"]
+    number_of_calls = api_config["number_of_calls"]
+    batch_size = api_config["batch_size"]
+    
+    semaphore = asyncio.Semaphore(concurrency_limit)
+    tasks = []
+
+    async def worker(user_quantity):
+        async with semaphore:
+            user_results = await api_client.get_users(user_quantity)
+            if user_results:
+                df = pd.DataFrame(user_results, columns = columns)
+                return df
+            return None
+
+    tasks = [asyncio.create_task(worker(user_quantity)) for task in range(number_of_calls)]
+
+    batch = []
+
+    for future in asyncio.as_completed(tasks):
+        df = await future
+        if df is not None and not df.empty:
+            batch.append(df)
+
+        if len(batch) >= batch_size:
+            combined_df = pd.concat(batch)
+            insert_data_into_duckdb(con, table_name, combined_df)
+            batch = []
+    
+    if batch:
+        combined_df = pd.concat(batch)
+        insert_data_into_duckdb(con, table_name, combined_df)
+
+
+    logging.info("pipeline complete")
+
 
 
 async def main(): 
-
-    with open("config.YAML", "r") as file:
-        config = yaml.safe_load(file)
-
+    logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
     try:
+        with open("config.YAML", "r") as file:
+            config = yaml.safe_load(file)
+
         base_url = config["api_config"]["base_url"]
-        number_of_users = config["api_config"]["number_of_users"]
-        number_of_calls = config["api_config"]["number_of_calls"]
-        batch_size = config["api_config"]["batch_size"]
+        duckdb_table_location = config["duckdb"]["table_location"]
 
-        schema = config["schema"]
-        table_name = config["target_configs"]["duckdb"]["table_name"]
+        with duckdb.connect(duckdb_table_location) as con:
+            create_table_from_schema(con, config)
+
+            async with aiohttp.ClientSession() as session:
+                api_client = ApiClient(session, base_url)
+                await ingestion_pipeline(
+                    con=con,
+                    api_client=api_client,
+                    config=config
+                )
         
-        all_columns = list(config["schema"]["columns"].keys())
-        duck_db_exclusions = list(config["target_configs"]["duckdb"]["exclude_columns"])
+            con.sql(f"SELECT * FROM faker_api_table").show()
 
-        table_creation_string = create_duck_db_table_creation_string_from_schema(schema, table_name, duck_db_exclusions)
-        table_insertion_string = create_duck_db_table_insertion_string_from_schema(schema, duck_db_exclusions)
-
-        print(f"Base URL: {base_url}")
-        print(f"Number of Users per call: {number_of_users}")
-        print(f"Number of API Calls: {number_of_calls}")
-        print(f"Batch Size for DB insert: {batch_size}")
-        print(f"Schema from config: {schema}")
-        print(f"DuckDB Table Name: {table_name}")
-    
-
-        print(f"All Columns found in schema: {all_columns}")
-        print(f"Columns to exclude for DuckDB: {duck_db_exclusions}")
-        
-        print(table_creation_string)
-        print(f"THE TABLE INSERTION STRING {table_insertion_string}")
-    
     except Exception as e:
-        print(f"something wrong: {e}")
-
-
-    with duckdb.connect("/data/database.db") as con:
-        con.sql(table_creation_string)
-
-        async with aiohttp.ClientSession() as session:
-            api_client = ApiClient(session, base_url, all_columns)
-            tasks = [
-                    asyncio.create_task(api_client.get_users(number_of_users, all_columns))
-                    for task in range(number_of_calls)
-                ]
-
-            batch = []
-
-            for future in asyncio.as_completed(tasks):
-                df = await future
-                if df is not None and not df.empty:
-                    batch.append(df)
-
-                if len(batch) >= batch_size:
-                    combined_df = pd.concat(batch)
-                    con.execute(f"INSERT INTO {table_name} BY NAME SELECT {table_insertion_string} FROM combined_df")
-                    batch = []
-
-            if batch:
-                combined_df = pd.concat(batch)
-                con.execute(f"INSERT INTO {table_name} BY NAME SELECT {table_insertion_string} FROM combined_df")
-
-        
-        con.sql(f"SELECT * FROM {table_name}").show()
-
+        logging.error(f"something critical occurred: {e}")
+            
 
 asyncio.run(main())
